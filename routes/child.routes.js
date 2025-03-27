@@ -1,4 +1,3 @@
-// routes/child.routes.js
 const express = require("express");
 const router = express.Router();
 const ChildController = require("../controllers/child.controller");

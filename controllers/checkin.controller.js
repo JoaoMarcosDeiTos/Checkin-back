@@ -1,7 +1,6 @@
-// controllers/checkin.controller.js
-const db = require("../database");
+const pool = require("../database/connection");
 
-exports.registerCheckin = (req, res) => {
+exports.registerCheckin = async (req, res) => {
   const { responsavel_cpf, criancas_ids } = req.body;
 
   if (
@@ -14,50 +13,46 @@ exports.registerCheckin = (req, res) => {
     });
   }
 
-  // Verificar se o responsável existe
-  db.get(
-    `SELECT id FROM responsaveis WHERE cpf = ?`,
-    [responsavel_cpf],
-    (err, responsavel) => {
-      if (err) return res.status(400).json({ error: err.message });
-      if (!responsavel)
-        return res.status(404).json({ error: "Responsável não encontrado." });
-
-      const responsavel_id = responsavel.id;
-      const dataHora = new Date().toISOString();
-
-      // Inserir o check-in principal
-      db.run(
-        `INSERT INTO checkins (responsavel_id, data_hora) VALUES (?, ?)`,
-        [responsavel_id, dataHora],
-        function (err) {
-          if (err) return res.status(400).json({ error: err.message });
-
-          const checkin_id = this.lastID;
-
-          // Inserir vínculos com as crianças
-          const placeholders = criancas_ids.map(() => "(?, ?)").join(", ");
-          const values = criancas_ids.flatMap((crianca_id) => [
-            checkin_id,
-            crianca_id,
-          ]);
-
-          db.run(
-            `INSERT INTO checkin_crianca (checkin_id, crianca_id) VALUES ${placeholders}`,
-            values,
-            function (err) {
-              if (err) return res.status(400).json({ error: err.message });
-
-              res.json({
-                checkin_id,
-                data_hora: dataHora,
-                criancas_ids,
-                responsavel_id,
-              });
-            }
-          );
-        }
-      );
+  try {
+    // Verifica se o responsável existe
+    const respResult = await pool.query(
+      "SELECT id FROM responsaveis WHERE cpf = $1",
+      [responsavel_cpf]
+    );
+    if (respResult.rows.length === 0) {
+      return res.status(404).json({ error: "Responsável não encontrado." });
     }
-  );
+    const responsavel_id = respResult.rows[0].id;
+    const dataHora = new Date().toISOString();
+
+    // Insere o check-in principal e retorna o ID
+    const checkinResult = await pool.query(
+      "INSERT INTO checkins (responsavel_id, data_hora) VALUES ($1, $2) RETURNING id",
+      [responsavel_id, dataHora]
+    );
+    const checkin_id = checkinResult.rows[0].id;
+
+    // Insere os vínculos com as crianças (bulk insert)
+    const placeholders = criancas_ids
+      .map((_, index) => `($${index * 2 + 1}, $${index * 2 + 2})`)
+      .join(", ");
+    const values = criancas_ids.flatMap((crianca_id) => [
+      checkin_id,
+      crianca_id,
+    ]);
+
+    await pool.query(
+      `INSERT INTO checkin_crianca (checkin_id, crianca_id) VALUES ${placeholders}`,
+      values
+    );
+
+    res.json({
+      checkin_id,
+      data_hora: dataHora,
+      criancas_ids,
+      responsavel_id,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 };
