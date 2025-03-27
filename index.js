@@ -5,7 +5,7 @@ const cors = require("cors");
 const app = express();
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({ origin: "*" }));
 
 const responsibleRoutes = require("./routes/responsible.routes");
 const childRoutes = require("./routes/child.routes");
