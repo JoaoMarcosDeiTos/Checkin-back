@@ -5,7 +5,17 @@ const cors = require("cors");
 const app = express();
 
 app.use(express.json());
-app.use(cors({ origin: "*" }));
+const allowedOrigins = [
+  "https://joaomarcosdeitos.github.io", // seu GitHub Pages
+];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
 
 const responsibleRoutes = require("./routes/responsible.routes");
 const childRoutes = require("./routes/child.routes");
